@@ -23,9 +23,8 @@ import java.util.stream.Collectors;
 
 /**
  * 接口代理处理器的模版方法类
- * @param <T> 要代理的接口
  */
-public interface InterfaceProxyProcessor<T> {
+public interface InterfaceProxyProcessor {
 
     String DEFAULT_RESOURCE_PATTERN = "**/*.class";
 
@@ -40,13 +39,19 @@ public interface InterfaceProxyProcessor<T> {
      * 代理这个接口的FactoryBean的类
      * @return FactoryBean实现类的class
      */
-    Class<? extends T> getFactoryBeanClass();
+    Class<?> getFactoryBeanClass();
 
     /**
      * 返回提供给用户注册扫描包名的注解
      * @return 某个注解，value为包名
      */
     Class<?> getPackageAnnotation();
+
+    /**
+     * 对要代理的接口定义预检，确保符合定义，不符合定义抛异常
+     * @param interfaceType 要代理的接口
+     */
+    void preCheck(Class<?> interfaceType);
 
     /**
      * 注册bean定义的模版方法，方便复用
@@ -63,6 +68,7 @@ public interface InterfaceProxyProcessor<T> {
         // 2. 扫描包，获取要代理的接口集合
         Set<Class<?>> beanClazzs = scannerPackages(basePackageName, resourceLoader, environment);
         beanClazzs.stream()
+                .peek(this::preCheck)
                 .map(clazz -> {
                     // 2.1 构造beanDefinition，设置生成代理类的FactoryBean以及其构造用的参数
                     BeanDefinitionBuilder builder = BeanDefinitionBuilder.genericBeanDefinition(clazz);

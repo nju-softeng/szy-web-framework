@@ -2,7 +2,6 @@ package com.szy.core.configcenter.factory;
 
 import com.szy.core.configcenter.ConfigFetcher;
 import com.szy.core.configcenter.annotation.SValue;
-import com.szy.core.eunm.SzyExceptionEnum;
 import com.szy.core.util.GenericBuilder;
 import com.szy.core.util.TypeUtils;
 import org.springframework.beans.factory.FactoryBean;
@@ -37,20 +36,15 @@ public class ConfigCenterFactory<T> implements FactoryBean<T> {
         this.interfaceType = interfaceType;
     }
 
+    /**
+     * 所有的检查都交给对应的processor
+     * @return 代理bean
+     */
     @Override
-    public T getObject() throws Exception {
-        Method[] methods = interfaceType.getMethods();
-        for (Method method : methods) {
-            if (method.isDefault()) {
-                continue;
-            }
-            SzyExceptionEnum.CONFIG_CENTER_METHOD_SIGNATURE_ERROR
-                    .throwsIf(method.getParameterCount() != 0 || method.getReturnType() == void.class);
-            SzyExceptionEnum.CONFIG_CENTER_ANNOTATION_NOT_FOUND
-                    .throwsIf(TypeUtils.isConfigBasicTypes(method.getReturnType()) && method.getAnnotation(SValue.class) == null);
-        }
-
-        CallbackHelper callbackHelper = new CallbackHelper(Object.class, new Class[]{interfaceType}) {
+    public T getObject() {
+        final Class<?> superClass = Object.class;
+        final Class<?>[] interfaces = new Class[]{interfaceType};
+        CallbackHelper callbackHelper = new CallbackHelper(superClass, interfaces) {
             @Override
             protected Object getCallback(Method method) {
                 return method.isDefault()
@@ -60,8 +54,8 @@ public class ConfigCenterFactory<T> implements FactoryBean<T> {
         };
 
         Enhancer enhancer = GenericBuilder.of(Enhancer::new)
-                .with(Enhancer::setSuperclass, Object.class)
-                .with(Enhancer::setInterfaces, new Class[] {interfaceType})
+                .with(Enhancer::setSuperclass, superClass)
+                .with(Enhancer::setInterfaces, interfaces)
                 .with(Enhancer::setCallbackFilter, callbackHelper)
                 .with(Enhancer::setCallbackTypes, callbackHelper.getCallbackTypes())
                 .with(Enhancer::setCallbacks, callbackHelper.getCallbacks())
@@ -73,13 +67,9 @@ public class ConfigCenterFactory<T> implements FactoryBean<T> {
 
     /**
      * 构造一个这个类的对象
-     * 填充他的成员变量，成员变量要么为(基本类型 && SValue修饰)
-     * 要么为非基本类型
-     * @param clazz
      */
     private Object buildConfigObj(Class<?> clazz, @Nullable SValue sValue) throws InstantiationException, IllegalAccessException {
         if (TypeUtils.isConfigBasicTypes(clazz)) {
-            SzyExceptionEnum.CONFIG_CENTER_ANNOTATION_NOT_FOUND.throwsIf(sValue == null);
             return TypeUtils.transformToBasicType(configFetcher.find(sValue.value()), clazz);
         }
         Object ret = clazz.newInstance();
